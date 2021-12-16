@@ -21,24 +21,25 @@ public class MySession {
 
     public <T> T find(Class<T> type, Object id){
         var key = new EntityKey<>(type,id);
-        var entity = entitiesMap.computeIfAbsent(key,k -> findIfAbsentInCache(type, id));
+        var entity = entitiesMap.computeIfAbsent(key,k -> findIfAbsentInCache(type, id, key));
         return (T) entity;
     }
 
     @SneakyThrows
-    private <T> T findIfAbsentInCache(Class<T> type, Object id){
+    private <T> T findIfAbsentInCache(Class<T> type, Object id, EntityKey<T> entityKey){
         try(var connection = dataSource.getConnection()){
             var selectString = formSelectQuery(type);
             try(var statement = connection.prepareStatement(selectString)){
                 statement.setObject(1,id);
                 var resultSet = statement.getResultSet();
-                return newEntityFromResultSet(type,resultSet);
+                return newEntityFromResultSet(type,resultSet,entityKey);
             }
         }
     }
 
     @SneakyThrows
-    private <T> T newEntityFromResultSet(Class<T> type, ResultSet resultSet) {
+    private <T> T newEntityFromResultSet(Class<T> type, ResultSet resultSet, EntityKey<T> entityKey) {
+
         resultSet.next();
         var entity = type.getConstructor().newInstance();
         Field[] fields = type.getDeclaredFields();
@@ -49,6 +50,7 @@ public class MySession {
             var value = resultSet.getObject(columnName);
             field.set(entity, value);
         }
+        entitiesMap.put(entityKey,entity);
         return entity;
     }
 
